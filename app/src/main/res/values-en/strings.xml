@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">12-Grid Ball</string>
+
+    <string name="perm_welcome">Welcome to 12-Grid Ball\n\nPlease grant "Display over other apps" permission to continue.</string>
+    <string name="btn_open_perm">Grant Permission</string>
+    <string name="title_select_apps">Select apps for the ball (%1$d/%2$d)</string>
+    <string name="btn_save_start">Save &amp; Start Ball</string>
+    <string name="toast_max_limit">Select up to %d apps only</string>
+    <string name="toast_perm_denied">Permission is required</string>
+    <string name="toast_save_success">Saved &amp; Started</string>
+    <string name="version_prefix">Version: v</string>
+
+    <string name="toast_setup_first">Please select apps in settings first</string>
+    <string name="toast_not_installed">App not installed</string>
+    <string name="notif_title">12-Grid Ball</string>
+    <string name="notif_content">Running in background...</string>
+    <string name="notif_channel_name">Keep-alive Service</string>
+</resources>

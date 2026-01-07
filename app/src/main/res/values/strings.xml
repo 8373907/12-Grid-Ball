@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">12宫悬浮球</string>
+
+    <string name="perm_welcome">欢迎使用 12宫悬浮球\n\n为了正常显示，请先授予“在其他应用上层显示”权限。</string>
+    <string name="btn_open_perm">去开启权限</string>
+    <string name="title_select_apps">请选择要在悬浮球显示的应用 (%1$d/%2$d)</string>
+    <string name="btn_save_start">保存配置并开启悬浮球</string>
+    <string name="toast_max_limit">最多只能选 %d 个</string>
+    <string name="toast_perm_denied">必须开启权限才能使用</string>
+    <string name="toast_save_success">设置已保存，悬浮球已启动</string>
+    <string name="version_prefix">当前版本: v</string>
+
+    <string name="toast_setup_first">请先在APP中设置要显示的应用</string>
+    <string name="toast_not_installed">未安装或无法启动</string>
+    <string name="notif_title">12宫悬浮球</string>
+    <string name="notif_content">正在后台运行中...</string>
+    <string name="notif_channel_name">悬浮球保活服务</string>
+</resources>
