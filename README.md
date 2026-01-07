@@ -32,6 +32,7 @@
 4.  **保活设置（重要）**：为了防止被系统后台查杀导致消失，请务必：
     * 将本应用的电池策略设置为 **“无限制”**。
     * 在多任务界面将本应用 **“锁定”**。
+5.  **语言支持**：软件目前仅支持简体中文和英文（非中文系统下自动显示为英文）。
 
 ---
 
@@ -89,6 +90,54 @@
 ---
 
 ## 🛠️ 开发环境
+* **IDE**: Android Studio Ladybug | 2024.2.1
+* **Language**: Java
+* **Min SDK**: Android 8.0 (API 26)
+
+------------------------------------
+
+# 12-App Quick Launcher
+
+> **Minimalist, Efficient, Privacy-First.**
+
+## 💡 Motivation
+Most floating ball apps on the market suffer from two issues: they are either bloated with unnecessary features or require intrusive **"Accessibility Service"** permissions, which pose potential privacy risks. Native system solutions (like Xiaomi's Quick Ball) are often limited to just 5 shortcuts.
+
+**12-App Quick Launcher** was created to solve this. It focuses purely on **quick app launching**, requires **NO sensitive permissions**, and remains lightweight.
+
+---
+
+## ✨ Key Features
+* **🧩 12-Slot Grid Menu**: Overcomes system limitations by allowing up to 12 customizable app shortcuts.
+* **🛡️ OLED Burn-in Protection**: Features a pixel-shift algorithm that automatically moves the floating ball slightly every minute in hidden mode to prevent screen burn-in.
+* **🌗 Dual-Layer High Contrast**: Unique "White Core + Black Edge" design ensures high visibility on both bright white and dark backgrounds.
+* **🤖 Smart Snapping**:
+    * Automatically snaps to the vertical center of the screen edge after rotation.
+    * **Corner Avoidance**: Prevents the ball from getting stuck in the screen corners.
+    * **Auto-Hide**: Automatically tucks into the side and becomes semi-transparent after 3 seconds of inactivity.
+* **👁️ Adaptive Resolution**: Perfectly adapts to 1K, 2K, and 4K screens using dynamic DP-to-PX calculations.
+
+---
+
+## ⚠️ Notes & Limitations
+Since this app acts as a standard user app and **does NOT request Root or Accessibility permissions**, please note the following:
+
+1.  **System Requirement**: **Android 9.0+** is recommended for full support of notch/cutout displays.
+2.  **Screenshots**: The floating ball will appear in your screenshots (system-level hiding is not possible without Root).
+3.  **Notification**: You may see a system notification saying "Displaying over other apps." You can hide this notification in your system settings.
+4.  **Keep Alive (Important)**: To prevent the system from killing the app in the background:
+    * Set the app's battery usage to **"Unrestricted"**.
+    * **Lock** the app in your "Recent Apps" overview.
+5.  **Language Support**: Currently, the app only supports **Simplified Chinese** and **English**.
+
+---
+
+## 📥 Download
+Please verify the **[Releases]** section on the right side of this page to download the latest `.apk` file.
+
+---
+
+## 🛠️ Tech Stack
 * **IDE**: Android Studio Ladybug | 2024.2.1
 * **Language**: Java
 * **Min SDK**: Android 8.0 (API 26)
