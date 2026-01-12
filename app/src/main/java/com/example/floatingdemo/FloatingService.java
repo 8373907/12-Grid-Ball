@@ -18,6 +18,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -47,35 +49,30 @@ public class FloatingService extends Service {
     private Runnable hideRunnable;
     private boolean isHidden = false;
 
-    // 【功能点4】自动抖动防止烧屏
-    // 使用独立的 Handler 来处理防烧屏的定时任务
     private Handler burnInHandler = new Handler(Looper.getMainLooper());
     private Runnable burnInRunnable;
 
-    // 记录隐藏时的基准Y坐标（“桩子”），确保抖动只在原位置附近小范围进行
     private int initialHideY = 0;
 
-    // =================================================================================
-    // 【功能点4】 防烧屏配置
-    // =================================================================================
-    // 抖动频率：每 1 分钟抖动一次
     private static final int BURN_IN_INTERVAL = 1 * 60 * 1000;
-    // 最大位移距离：每次上下随机移动不超过 15 像素
     private static final int MAX_SHIFT_PIXELS = 15;
 
-    private static final int BALL_SIZE = 110;
+    // =================================================================================
+    // 长按相关变量
+    // =================================================================================
+    private Handler longPressHandler = new Handler(Looper.getMainLooper());
+    private Runnable longPressRunnable;
+    private boolean isLongPressed = false;
+    private static final int LONG_PRESS_DURATION = 1000; // 1秒
+    private static final int TOUCH_SLOP = 15; // 手指防抖动范围
 
-    // =================================================================================
-    // 【功能点6】 解决2K屏幕图标过小问题
-    // =================================================================================
-    // 使用 dp (独立像素) 定义图标大小和间距，确保在 1K/2K/4K 屏幕上物理尺寸一致
+    private int screenWidth;
+    private int screenHeight; // 新增高度变量
+    private int ballSizePx;
+
+    private static final float BALL_SIZE_RATIO = 0.105f;
     private static final int ICON_SIZE_DP = 34;
     private static final int ICON_MARGIN_DP = 8;
-
-    // =================================================================================
-    // 【功能点2】 禁止在四个角隐藏
-    // =================================================================================
-    // 定义转角禁区距离 (80dp)，防止悬浮球躲在屏幕圆角里按不到
     private static final int CORNER_MARGIN_DP = 80;
 
     @Override
@@ -87,8 +84,8 @@ public class FloatingService extends Service {
         startForegroundNotification();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // 【功能点7】 3秒自动侧边隐藏
-        // 初始化隐藏任务，3秒后执行 toSideHiddenMode
+        updateDimensions();
+
         hideRunnable = new Runnable() {
             @Override
             public void run() {
@@ -96,30 +93,58 @@ public class FloatingService extends Service {
             }
         };
 
-        // 【功能点4】 防烧屏定时任务逻辑
         burnInRunnable = new Runnable() {
             @Override
             public void run() {
                 if (isHidden && floatingBallView != null) {
-                    performPixelShift(); // 执行微小位移
-                    burnInHandler.postDelayed(this, BURN_IN_INTERVAL); // 预约下一次
+                    performPixelShift();
+                    burnInHandler.postDelayed(this, BURN_IN_INTERVAL);
                 }
+            }
+        };
+
+        longPressRunnable = new Runnable() {
+            @Override
+            public void run() {
+                isLongPressed = true;
+                try {
+                    Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                    if (v != null && v.hasVibrator()) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            v.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
+                        } else {
+                            v.vibrate(50);
+                        }
+                    }
+                } catch (Exception e) {
+                }
+
+                openMainActivity();
+                removeMenu();
             }
         };
 
         createFloatingBall();
     }
 
-    // 【功能点6】 屏幕适配核心工具方法
-    // 将 dp 转为 px，用于适配不同分辨率的屏幕密度
+    // =================================================================================
+    // 【关键修复】 无论横竖屏，都取短边来计算大小
+    // =================================================================================
+    private void updateDimensions() {
+        screenWidth = getCurrentScreenWidth();
+        screenHeight = getCurrentScreenHeight();
+
+        // 取宽和高中较小的一个作为基准
+        int minDimension = Math.min(screenWidth, screenHeight);
+
+        ballSizePx = (int) (minDimension * BALL_SIZE_RATIO);
+    }
+
     private int dp2px(float dp) {
         final float scale = getResources().getDisplayMetrics().density;
         return (int) (dp * scale + 0.5f);
     }
 
-    // =================================================================================
-    // 【功能点1】 屏幕旋转自适应逻辑
-    // =================================================================================
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -127,40 +152,36 @@ public class FloatingService extends Service {
             removeMenu();
         }
 
-        // 关键逻辑：直接通过 X 坐标判断球之前是在左边还是右边
-        // 避免使用屏幕宽度计算，因为旋转瞬间屏幕宽度的值可能尚未更新或混乱
         boolean wasOnLeft = ballParams.x < 300;
 
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                int newScreenWidth = getCurrentScreenWidth();
-                int newScreenHeight = getCurrentScreenHeight();
+                // 屏幕旋转后，重新计算大小
+                updateDimensions();
 
-                // 1. 横屏/竖屏切换后，自动吸附到对应侧边
+                ballParams.width = ballSizePx;
+                ballParams.height = ballSizePx;
+
                 if (wasOnLeft) {
                     ballParams.x = 0;
                 } else {
-                    ballParams.x = newScreenWidth - ballParams.width;
+                    ballParams.x = screenWidth - ballParams.width;
                 }
+                ballParams.y = (screenHeight / 2) - (ballParams.height / 2);
 
-                // 2. 强制垂直居中，确保用户能第一时间找到球
-                ballParams.y = (newScreenHeight / 2) - (ballParams.height / 2);
-
-                windowManager.updateViewLayout(floatingBallView, ballParams);
-
-                // 3. 恢复之前的状态（隐藏或吸边）
                 if (isHidden) {
+                    floatingBallView.setBackground(createArcDrawable());
                     toSideHiddenMode();
                 } else {
+                    floatingBallView.setBackground(createNormalDrawable());
                     snapToEdge();
                 }
+                windowManager.updateViewLayout(floatingBallView, ballParams);
             }
-        }, 300); // 延时 300ms 确保屏幕旋转动画完成，获取准确的屏幕尺寸
+        }, 300);
     }
 
-    // 【功能点5】 修正刘海屏/挖孔屏隐藏不完美的问题
-    // 使用 getRealMetrics 获取包含导航栏、刘海区的完整物理屏幕尺寸
     private int getCurrentScreenWidth() {
         DisplayMetrics metrics = new DisplayMetrics();
         windowManager.getDefaultDisplay().getRealMetrics(metrics);
@@ -182,19 +203,15 @@ public class FloatingService extends Service {
         ballParams.type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ?
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
         ballParams.format = PixelFormat.TRANSLUCENT;
-
         ballParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
-
         ballParams.gravity = Gravity.TOP | Gravity.LEFT;
 
-        // 【功能点5】 允许悬浮球延伸到刘海屏区域
-        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES 确保隐藏时能完全贴边，不会被刘海挡住
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             ballParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
 
-        ballParams.width = BALL_SIZE;
-        ballParams.height = BALL_SIZE;
+        ballParams.width = ballSizePx;
+        ballParams.height = ballSizePx;
         ballParams.x = 0;
         ballParams.y = 500;
 
@@ -212,7 +229,6 @@ public class FloatingService extends Service {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 handler.removeCallbacks(hideRunnable);
-                // 触摸时停止防烧屏抖动，防止球乱跑
                 stopBurnInProtection();
 
                 if (isHidden) {
@@ -221,6 +237,7 @@ public class FloatingService extends Service {
                     initialY = ballParams.y;
                     initialTouchX = event.getRawX();
                     initialTouchY = event.getRawY();
+                    return true;
                 }
 
                 switch (event.getAction()) {
@@ -230,17 +247,35 @@ public class FloatingService extends Service {
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
                         touchStartTime = System.currentTimeMillis();
+
+                        isLongPressed = false;
+                        longPressHandler.postDelayed(longPressRunnable, LONG_PRESS_DURATION);
                         return true;
 
                     case MotionEvent.ACTION_MOVE:
-                        ballParams.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        ballParams.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        windowManager.updateViewLayout(floatingBallView, ballParams);
+                        float dx = event.getRawX() - initialTouchX;
+                        float dy = event.getRawY() - initialTouchY;
+
+                        if (Math.abs(dx) > TOUCH_SLOP || Math.abs(dy) > TOUCH_SLOP) {
+                            longPressHandler.removeCallbacks(longPressRunnable);
+                        }
+
+                        if (!isLongPressed) {
+                            ballParams.x = initialX + (int) dx;
+                            ballParams.y = initialY + (int) dy;
+                            windowManager.updateViewLayout(floatingBallView, ballParams);
+                        }
                         return true;
 
                     case MotionEvent.ACTION_UP:
+                        longPressHandler.removeCallbacks(longPressRunnable);
+
                         float movedDistance = Math.abs(event.getRawX() - initialTouchX) + Math.abs(event.getRawY() - initialTouchY);
-                        // 点击判定：移动距离小且时间短
+
+                        if (isLongPressed) {
+                            return true;
+                        }
+
                         if (movedDistance < 10 && (System.currentTimeMillis() - touchStartTime) < 200) {
                             if (isMenuVisible) {
                                 removeMenu();
@@ -248,7 +283,6 @@ public class FloatingService extends Service {
                                 showMenuNearBall();
                             }
                         } else {
-                            // 拖拽结束：吸边
                             snapToEdge();
                         }
                         return true;
@@ -258,33 +292,33 @@ public class FloatingService extends Service {
         });
     }
 
+    private void openMainActivity() {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
     private GradientDrawable createNormalDrawable() {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setShape(GradientDrawable.OVAL);
         drawable.setColor(Color.parseColor("#80333333"));
         drawable.setStroke(8, Color.WHITE);
-        drawable.setSize(BALL_SIZE, BALL_SIZE);
+        drawable.setSize(ballSizePx, ballSizePx);
         return drawable;
     }
 
-    // =================================================================================
-    // 【功能点3】 自动隐藏圆环双色设计 (仿小米悬浮球)
-    // =================================================================================
-    // 采用 LayerDrawable 叠加两层圆环，实现"白芯黑边"的高对比度设计
     private Drawable createArcDrawable() {
-        // 1. 底层圆环（黑边）：适应浅色背景
-        // 20% 黑色 (#33000000)，提供淡淡的阴影轮廓
         GradientDrawable darkRing = new GradientDrawable();
         darkRing.setShape(GradientDrawable.OVAL);
         darkRing.setColor(Color.TRANSPARENT);
         darkRing.setStroke(dp2px(6), Color.parseColor("#33000000"));
+        darkRing.setSize(ballSizePx, ballSizePx);
 
-        // 2. 顶层圆环（白芯）：适应深色背景
-        // 50% 白色 (#80FFFFFF)，半透明磨砂质感，不刺眼
         GradientDrawable lightRing = new GradientDrawable();
         lightRing.setShape(GradientDrawable.OVAL);
         lightRing.setColor(Color.TRANSPARENT);
         lightRing.setStroke(dp2px(4), Color.parseColor("#80FFFFFF"));
+        lightRing.setSize(ballSizePx, ballSizePx);
 
         LayerDrawable layerDrawable = new LayerDrawable(new Drawable[]{darkRing, lightRing});
         return layerDrawable;
@@ -294,7 +328,6 @@ public class FloatingService extends Service {
         int currentScreenWidth = getCurrentScreenWidth();
         int currentScreenHeight = getCurrentScreenHeight();
 
-        // X轴逻辑：吸附到左右两侧
         int centerX = ballParams.x + ballParams.width / 2;
         if (centerX < currentScreenWidth / 2) {
             ballParams.x = 0;
@@ -302,8 +335,6 @@ public class FloatingService extends Service {
             ballParams.x = currentScreenWidth - ballParams.width;
         }
 
-        // 【功能点2】 Y轴逻辑：禁止在四个角隐藏
-        // 限制 Y 轴坐标在 [顶部安全线, 底部安全线] 范围内
         int minSafeY = dp2px(CORNER_MARGIN_DP);
         int maxSafeY = currentScreenHeight - ballParams.height - dp2px(CORNER_MARGIN_DP);
 
@@ -314,30 +345,23 @@ public class FloatingService extends Service {
         }
 
         windowManager.updateViewLayout(floatingBallView, ballParams);
-
-        // 【功能点7】 重置3秒隐藏计时器
         resetHideTimer();
     }
 
     private void toSideHiddenMode() {
         isHidden = true;
-
-        // 切换为双色透明圆环样式
         floatingBallView.setBackground(createArcDrawable());
         floatingBallView.setAlpha(1.0f);
 
         int currentScreenWidth = getCurrentScreenWidth();
-
-        // 隐藏逻辑：球体 65% 缩进屏幕，露出 35%
-        int hideOffset = (int) (BALL_SIZE * 0.65f);
+        int hideOffset = (int) (ballSizePx * 0.65f);
 
         if (ballParams.x <= 0) {
             ballParams.x = -hideOffset;
         } else {
-            ballParams.x = currentScreenWidth - (BALL_SIZE - hideOffset);
+            ballParams.x = currentScreenWidth - (ballSizePx - hideOffset);
         }
 
-        // 再次检查转角限制，防止隐藏时滑入死角
         int currentScreenHeight = getCurrentScreenHeight();
         int minSafeY = dp2px(CORNER_MARGIN_DP);
         int maxSafeY = currentScreenHeight - ballParams.height - dp2px(CORNER_MARGIN_DP);
@@ -345,8 +369,6 @@ public class FloatingService extends Service {
         if (ballParams.y > maxSafeY) ballParams.y = maxSafeY;
 
         windowManager.updateViewLayout(floatingBallView, ballParams);
-
-        // 记录基准位置，启动防烧屏抖动
         initialHideY = ballParams.y;
         startBurnInProtection();
     }
@@ -359,7 +381,6 @@ public class FloatingService extends Service {
 
         int currentScreenWidth = getCurrentScreenWidth();
 
-        // 恢复正常模式时，确保球完全在屏幕内
         if (ballParams.x < 0) ballParams.x = 0;
         if (ballParams.x > currentScreenWidth - ballParams.width) {
             ballParams.x = currentScreenWidth - ballParams.width;
@@ -371,7 +392,6 @@ public class FloatingService extends Service {
 
     private void resetHideTimer() {
         handler.removeCallbacks(hideRunnable);
-        // 【功能点7】 3000毫秒 (3秒) 后触发隐藏
         handler.postDelayed(hideRunnable, 3000);
     }
 
@@ -384,7 +404,6 @@ public class FloatingService extends Service {
         burnInHandler.removeCallbacks(burnInRunnable);
     }
 
-    // 【功能点4】 执行微小的像素偏移
     private void performPixelShift() {
         int offset = new Random().nextInt(MAX_SHIFT_PIXELS * 2) - MAX_SHIFT_PIXELS;
         ballParams.y = initialHideY + offset;
@@ -442,7 +461,6 @@ public class FloatingService extends Service {
 
         int currentScreenWidth = getCurrentScreenWidth();
 
-        // 动态计算菜单宽度和位置，防止菜单被遮挡
         int singleItemWidthPx = dp2px(ICON_SIZE_DP) + dp2px(ICON_MARGIN_DP) * 2;
         int menuTotalWidthPx = singleItemWidthPx * 2;
         int gapPx = dp2px(10);
@@ -488,11 +506,11 @@ public class FloatingService extends Service {
 
     private ImageView createAppIconView(String pkg, PackageManager pm) {
         ImageView icon = new ImageView(this);
-        // 【功能点6】 使用 dp 动态计算图标大小，适配高清屏
-        int iconSize = dp2px(ICON_SIZE_DP);
+
+        int iconSizePx = dp2px(ICON_SIZE_DP);
         int margin = dp2px(ICON_MARGIN_DP);
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(iconSize, iconSize);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(iconSizePx, iconSizePx);
         lp.setMargins(margin, margin, margin, margin);
         icon.setLayoutParams(lp);
 
