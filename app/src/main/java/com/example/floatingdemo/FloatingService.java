@@ -67,7 +67,7 @@ public class FloatingService extends Service {
     private static final int TOUCH_SLOP = 15; // 手指防抖动范围
 
     private int screenWidth;
-    private int screenHeight; // 新增高度变量
+    private int screenHeight;
     private int ballSizePx;
 
     private static final float BALL_SIZE_RATIO = 0.105f;
@@ -127,16 +127,10 @@ public class FloatingService extends Service {
         createFloatingBall();
     }
 
-    // =================================================================================
-    // 【关键修复】 无论横竖屏，都取短边来计算大小
-    // =================================================================================
     private void updateDimensions() {
         screenWidth = getCurrentScreenWidth();
         screenHeight = getCurrentScreenHeight();
-
-        // 取宽和高中较小的一个作为基准
         int minDimension = Math.min(screenWidth, screenHeight);
-
         ballSizePx = (int) (minDimension * BALL_SIZE_RATIO);
     }
 
@@ -157,9 +151,7 @@ public class FloatingService extends Service {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                // 屏幕旋转后，重新计算大小
                 updateDimensions();
-
                 ballParams.width = ballSizePx;
                 ballParams.height = ballSizePx;
 
@@ -220,6 +212,9 @@ public class FloatingService extends Service {
         resetHideTimer();
     }
 
+    // =================================================================================
+    // 【修改点】 修复了隐藏模式下点击需要点两次的问题
+    // =================================================================================
     private void initTouchListener() {
         floatingBallView.setOnTouchListener(new View.OnTouchListener() {
             private int initialX, initialY;
@@ -231,17 +226,16 @@ public class FloatingService extends Service {
                 handler.removeCallbacks(hideRunnable);
                 stopBurnInProtection();
 
-                if (isHidden) {
-                    toNormalMode();
-                    initialX = ballParams.x;
-                    initialY = ballParams.y;
-                    initialTouchX = event.getRawX();
-                    initialTouchY = event.getRawY();
-                    return true;
-                }
+                // 【这里改了】之前这里有 return true 阻止了后续逻辑，现在删掉了，让它继续往下走
 
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
+                        // 如果是隐藏状态，先恢复，并让球归位
+                        if (isHidden) {
+                            toNormalMode();
+                            // 注意：这里不用 return，让它继续初始化下面的坐标，这样 ACTION_UP 才能识别为点击
+                        }
+
                         initialX = ballParams.x;
                         initialY = ballParams.y;
                         initialTouchX = event.getRawX();
@@ -276,6 +270,7 @@ public class FloatingService extends Service {
                             return true;
                         }
 
+                        // 如果移动距离很小，且时间很短，就认为是点击
                         if (movedDistance < 10 && (System.currentTimeMillis() - touchStartTime) < 200) {
                             if (isMenuVisible) {
                                 removeMenu();

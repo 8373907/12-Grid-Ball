@@ -38,31 +38,24 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_SELECTION = 12;
 
     private LinearLayout rootLayout;
-
-    // 两个容器
     private LinearLayout selectedContainer;
     private LinearLayout appListContainer;
-
     private List<String> selectedPackages = new ArrayList<>();
-
     private TextView titleView;
     private ProgressBar loadingBar;
     private EditText searchInput;
-
     private List<AppItem> allInstalledApps = new ArrayList<>();
     private boolean isSelectionUIShowing = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 根布局：垂直线性布局
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setBackgroundColor(Color.WHITE);
-
-        // 【修复点1】让根布局可以获取焦点，防止EditText自动抢焦点导致滚屏
         rootLayout.setFocusable(true);
         rootLayout.setFocusableInTouchMode(true);
-
         setContentView(rootLayout);
     }
 
@@ -87,102 +80,112 @@ public class MainActivity extends AppCompatActivity {
     private void showPermissionUI() {
         rootLayout.removeAllViews();
         rootLayout.setGravity(Gravity.CENTER);
-
         TextView tip = new TextView(this);
         tip.setText("请授予悬浮窗权限");
         tip.setTextSize(18);
         rootLayout.addView(tip);
-
         Button btn = new Button(this);
         btn.setText("去开启");
-        btn.setOnClickListener(v -> startActivityForResult(
-                new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())),
-                REQUEST_CODE));
+        btn.setOnClickListener(v -> startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())), REQUEST_CODE));
         rootLayout.addView(btn);
     }
 
+    // 【修改核心】 构建上下分屏布局
     private void showAppSelectionUI() {
         rootLayout.removeAllViews();
         rootLayout.setGravity(Gravity.TOP);
 
-        ScrollView mainScrollView = new ScrollView(this);
-        mainScrollView.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
-        rootLayout.addView(mainScrollView);
-
-        LinearLayout contentLayout = new LinearLayout(this);
-        contentLayout.setOrientation(LinearLayout.VERTICAL);
-        contentLayout.setPadding(30, 30, 30, 30);
-        mainScrollView.addView(contentLayout);
-
-        // 1. 标题
+        // 1. 顶部标题 (固定)
         titleView = new TextView(this);
         updateTitle();
         titleView.setTextSize(18);
-        titleView.setPadding(0, 0, 0, 20);
+        titleView.setPadding(30, 30, 30, 10);
         titleView.setTextColor(Color.BLACK);
         titleView.setTypeface(null, Typeface.BOLD);
-        contentLayout.addView(titleView);
+        rootLayout.addView(titleView);
 
-        // 2. 已选应用排序区
-        addSortingSection(contentLayout);
+        // 2. 上半部分：已选应用列表 (Weight 1)
+        // 用一个 ScrollView 包裹，防止选多了屏幕不够
+        LinearLayout topWrapper = new LinearLayout(this);
+        topWrapper.setOrientation(LinearLayout.VERTICAL);
+        // layout_weight = 1，分配一半空间
+        LinearLayout.LayoutParams topParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        topWrapper.setLayoutParams(topParams);
+        topWrapper.setPadding(20, 0, 20, 0);
 
-        // 3. 保存按钮
+        // 排序区提示文字
+        TextView label = new TextView(this);
+        label.setText("【排序区】点击箭头调整顺序 (越靠上，球里越靠前)");
+        label.setTextColor(Color.parseColor("#FF5722"));
+        label.setTextSize(12);
+        label.setPadding(0, 5, 0, 10);
+        topWrapper.addView(label);
+
+        ScrollView topScroll = new ScrollView(this);
+        selectedContainer = new LinearLayout(this);
+        selectedContainer.setOrientation(LinearLayout.VERTICAL);
+        selectedContainer.setBackgroundColor(Color.parseColor("#F0F8FF")); // 淡蓝背景
+        selectedContainer.setPadding(10, 10, 10, 10);
+        topScroll.addView(selectedContainer);
+        topWrapper.addView(topScroll);
+
+        rootLayout.addView(topWrapper);
+
+        // 3. 中间部分：保存按钮 (固定)
         Button startButton = new Button(this);
         startButton.setText("保存排序 并 重启悬浮球");
         startButton.setBackgroundColor(Color.parseColor("#4CAF50"));
         startButton.setTextColor(Color.WHITE);
-        startButton.setPadding(0, 25, 0, 25);
-        startButton.setOnClickListener(v -> saveAndStartService());
-        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        btnParams.setMargins(0, 30, 0, 30);
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnParams.setMargins(40, 10, 40, 10);
         startButton.setLayoutParams(btnParams);
-        contentLayout.addView(startButton);
+        startButton.setOnClickListener(v -> saveAndStartService());
+        rootLayout.addView(startButton);
 
-        // 4. 下方搜索框
+        // 4. 下半部分：所有应用列表 (Weight 1)
+        LinearLayout bottomWrapper = new LinearLayout(this);
+        bottomWrapper.setOrientation(LinearLayout.VERTICAL);
+        // layout_weight = 1，分配另一半空间
+        LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        bottomWrapper.setLayoutParams(bottomParams);
+        bottomWrapper.setPadding(20, 0, 20, 0);
+
+        // 搜索框
         searchInput = new EditText(this);
-        searchInput.setHint("🔍 搜索下面的应用列表...");
+        searchInput.setHint("🔍 搜索应用...");
         searchInput.setBackgroundResource(android.R.drawable.edit_text);
         searchInput.setPadding(20, 20, 20, 20);
         searchInput.addTextChangedListener(new TextWatcher() {
-            @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filterAppList(s.toString());
-            }
-            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) { filterAppList(s.toString()); }
             public void afterTextChanged(Editable s) {}
         });
-        contentLayout.addView(searchInput);
+        bottomWrapper.addView(searchInput);
 
-        // 5. 所有应用列表
+        // 列表容器
         loadingBar = new ProgressBar(this);
-        contentLayout.addView(loadingBar);
+        bottomWrapper.addView(loadingBar);
 
+        ScrollView bottomScroll = new ScrollView(this);
         appListContainer = new LinearLayout(this);
         appListContainer.setOrientation(LinearLayout.VERTICAL);
-        contentLayout.addView(appListContainer);
+        bottomScroll.addView(appListContainer);
+        bottomWrapper.addView(bottomScroll);
 
-        addVersionFooter(contentLayout);
+        rootLayout.addView(bottomWrapper);
+
+        // 5. 底部版本号 (固定)
+        TextView v = new TextView(this);
+        v.setText("Version: " + getAppVersionName());
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(0, 10, 0, 10);
+        v.setTextColor(Color.LTGRAY);
+        rootLayout.addView(v);
+
         loadInstalledApps();
     }
 
-    private void addSortingSection(LinearLayout parent) {
-        TextView label = new TextView(this);
-        label.setText("【排序区】点击箭头调整顺序 (越靠上，球里越靠前)");
-        label.setTextColor(Color.parseColor("#FF5722"));
-        label.setTextSize(14);
-        label.setPadding(0, 0, 0, 15);
-        parent.addView(label);
-
-        selectedContainer = new LinearLayout(this);
-        selectedContainer.setOrientation(LinearLayout.VERTICAL);
-        selectedContainer.setBackgroundColor(Color.parseColor("#F0F8FF")); // 淡蓝背景
-        selectedContainer.setPadding(15, 15, 15, 15);
-        parent.addView(selectedContainer);
-    }
+    // ... (后续逻辑代码几乎不变，为了完整性贴出) ...
 
     private void loadInstalledApps() {
         SharedPreferences prefs = getSharedPreferences("FloatingConfig", Context.MODE_PRIVATE);
@@ -190,11 +193,7 @@ public class MainActivity extends AppCompatActivity {
         selectedPackages.clear();
         if (!savedString.isEmpty()) {
             String[] split = savedString.split(",");
-            for (String s : split) {
-                if (!s.trim().isEmpty() && !selectedPackages.contains(s)) {
-                    selectedPackages.add(s);
-                }
-            }
+            for (String s : split) { if (!s.trim().isEmpty()) selectedPackages.add(s); }
         }
         updateTitle();
 
@@ -203,7 +202,6 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_MAIN, null);
             intent.addCategory(Intent.CATEGORY_LAUNCHER);
             List<ResolveInfo> apps = pm.queryIntentActivities(intent, 0);
-
             allInstalledApps.clear();
             for (ResolveInfo info : apps) {
                 String pkg = info.activityInfo.packageName;
@@ -212,9 +210,7 @@ public class MainActivity extends AppCompatActivity {
                 Drawable icon = info.loadIcon(pm);
                 allInstalledApps.add(new AppItem(pkg, name, icon));
             }
-
             Collections.sort(allInstalledApps, (o1, o2) -> o1.name.compareTo(o2.name));
-
             runOnUiThread(() -> {
                 if (loadingBar != null) ((LinearLayout)loadingBar.getParent()).removeView(loadingBar);
                 refreshSortingView();
@@ -227,13 +223,12 @@ public class MainActivity extends AppCompatActivity {
         selectedContainer.removeAllViews();
         if (selectedPackages.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText("暂无选择，请在下方勾选应用");
+            empty.setText("暂无选择，请在下方勾选");
             empty.setPadding(20, 20, 20, 20);
             empty.setTextColor(Color.GRAY);
             selectedContainer.addView(empty);
             return;
         }
-
         PackageManager pm = getPackageManager();
         for (int i = 0; i < selectedPackages.size(); i++) {
             String pkg = selectedPackages.get(i);
@@ -241,15 +236,12 @@ public class MainActivity extends AppCompatActivity {
             String name = (item != null) ? item.name : pkg;
             Drawable icon = null;
             try { icon = pm.getApplicationIcon(pkg); } catch (Exception e) {}
-
             addSortingRow(i, pkg, name, icon);
         }
     }
 
     private AppItem findAppItem(String pkg) {
-        for (AppItem item : allInstalledApps) {
-            if (item.pkg.equals(pkg)) return item;
-        }
+        for (AppItem item : allInstalledApps) { if (item.pkg.equals(pkg)) return item; }
         return null;
     }
 
@@ -274,13 +266,10 @@ public class MainActivity extends AppCompatActivity {
         txt.setLayoutParams(lpTxt);
         row.addView(txt);
 
-        // 统一按钮样式
         int btnSize = 100;
-
         if (index > 0) {
             Button btnUp = new Button(this);
             btnUp.setText("⬆");
-            btnUp.setPadding(0,0,0,0);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(btnSize, btnSize);
             lp.setMargins(10, 0, 0, 0);
             btnUp.setLayoutParams(lp);
@@ -288,16 +277,13 @@ public class MainActivity extends AppCompatActivity {
             row.addView(btnUp);
         } else {
             View p = new View(this);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(btnSize, btnSize);
-            lp.setMargins(10, 0, 0, 0);
-            p.setLayoutParams(lp);
+            p.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
             row.addView(p);
         }
 
         if (index < selectedPackages.size() - 1) {
             Button btnDown = new Button(this);
             btnDown.setText("⬇");
-            btnDown.setPadding(0,0,0,0);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(btnSize, btnSize);
             lp.setMargins(10, 0, 0, 0);
             btnDown.setLayoutParams(lp);
@@ -305,16 +291,13 @@ public class MainActivity extends AppCompatActivity {
             row.addView(btnDown);
         } else {
             View p = new View(this);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(btnSize, btnSize);
-            lp.setMargins(10, 0, 0, 0);
-            p.setLayoutParams(lp);
+            p.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
             row.addView(p);
         }
 
         Button btnDel = new Button(this);
         btnDel.setText("✕");
         btnDel.setTextColor(Color.RED);
-        btnDel.setPadding(0,0,0,0);
         LinearLayout.LayoutParams lpDel = new LinearLayout.LayoutParams(btnSize, btnSize);
         lpDel.setMargins(10, 0, 0, 0);
         btnDel.setLayoutParams(lpDel);
@@ -325,7 +308,6 @@ public class MainActivity extends AppCompatActivity {
             filterAppList(searchInput.getText().toString());
         });
         row.addView(btnDel);
-
         selectedContainer.addView(row);
     }
 
@@ -370,13 +352,8 @@ public class MainActivity extends AppCompatActivity {
         row.addView(text);
 
         row.setOnClickListener(v -> {
-            // 【修复点2】点击列表时，强制将焦点抢回给根布局
-            // 这样EditText就不会因为自动获取焦点而导致滚屏了
             rootLayout.requestFocus();
-
-            // 顺便隐藏键盘，如果键盘是打开状态的话
             hideKeyboard(v);
-
             if (selectedPackages.contains(item.pkg)) {
                 selectedPackages.remove(item.pkg);
                 cb.setChecked(false);
@@ -391,15 +368,12 @@ public class MainActivity extends AppCompatActivity {
             updateTitle();
             refreshSortingView();
         });
-
         appListContainer.addView(row);
     }
 
     private void hideKeyboard(View view) {
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
-        }
+        if (imm != null) imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
     private void filterAppList(String query) {
@@ -407,31 +381,20 @@ public class MainActivity extends AppCompatActivity {
         List<AppItem> filtered = new ArrayList<>();
         String lower = query.toLowerCase();
         for (AppItem item : allInstalledApps) {
-            if (item.name.toLowerCase().contains(lower)) {
-                filtered.add(item);
-            }
+            if (item.name.toLowerCase().contains(lower)) filtered.add(item);
         }
         renderAppList(filtered);
     }
 
     private void saveAndStartService() {
         SharedPreferences prefs = getSharedPreferences("FloatingConfig", Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = prefs.edit();
-
         StringBuilder sb = new StringBuilder();
-        for (String pkg : selectedPackages) {
-            sb.append(pkg).append(",");
-        }
-        editor.putString("target_apps", sb.toString());
-        editor.apply();
-
+        for (String pkg : selectedPackages) sb.append(pkg).append(",");
+        prefs.edit().putString("target_apps", sb.toString()).apply();
         Intent intent = new Intent(this, FloatingService.class);
         stopService(intent);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
+        else startService(intent);
         Toast.makeText(this, "配置已保存", Toast.LENGTH_SHORT).show();
         moveTaskToBack(true);
     }
@@ -440,29 +403,10 @@ public class MainActivity extends AppCompatActivity {
         if (titleView != null) titleView.setText("已选: " + selectedPackages.size() + "/" + MAX_SELECTION);
     }
 
-    // =================================================================
-    // 【修改点】 自动读取 build.gradle 中的版本号
-    // =================================================================
-    private void addVersionFooter(LinearLayout parent) {
-        TextView v = new TextView(this);
-        // 调用下面的 getAppVersionName() 方法
-        v.setText("Version: " + getAppVersionName());
-        v.setGravity(Gravity.CENTER);
-        v.setPadding(0,30,0,30);
-        v.setTextColor(Color.LTGRAY);
-        parent.addView(v);
-    }
-
-    // 新增：读取系统版本号的方法
     private String getAppVersionName() {
         try {
-            PackageManager pm = getPackageManager();
-            PackageInfo pi = pm.getPackageInfo(getPackageName(), 0);
-            // 这里返回的就是 build.gradle 里的 versionName
-            return pi.versionName;
-        } catch (Exception e) {
-            return "Unknown";
-        }
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) { return "Unknown"; }
     }
 
     private static class AppItem {
