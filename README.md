@@ -60,3 +60,69 @@
 
 **Author**: [Your Name/GitHub ID]
 **License**: MIT
+
+
+
+----------------------------------
+# 12-Grid Floating Ball
+
+🚀 A lightweight and efficient Android floating assistant tool. Tap the floating ball to pop up a 12-grid menu and quickly launch your most frequently used apps.
+
+## ✨ Core Features
+
+* **Quick Launch**: Select up to 12 apps from your installed applications to add to the quick access menu.
+* **Custom Sorting**: Customize the icon order in the settings page using "⬆️ Move Up" and "⬇️ Move Down" buttons (**New in v1.1**).
+* **App Search**: Built-in search bar to quickly find and add apps.
+* **Smart Edge Snapping**:
+    * The floating ball automatically snaps to the screen edge when not in use.
+    * After 3 seconds of inactivity, it automatically transforms into a semi-transparent "fan-shaped" hidden mode to minimize distraction.
+* **Burn-in Protection**: In hidden mode, the floating ball slightly adjusts its position every minute to prevent OLED screen burn-in.
+* **Landscape Adaptation**: Perfectly adapted for landscape games/videos. The floating ball size adjusts automatically and won't become oversized (**Fixed in v1.1**).
+* **Optimized Interaction**:
+    * **Short Press**: Open/Close the 12-grid menu.
+    * **Long Press (1s)**: Open the main settings interface of this app.
+    * **Drag**: Freely move the floating ball position.
+
+## 📸 Screenshots
+
+| Settings (Sorting) | 12-Grid Menu | Hidden Mode |
+|:---:|:---:|:---:|
+| ![Settings](https://via.placeholder.com/200x400?text=Settings) | ![Menu](https://via.placeholder.com/200x400?text=Menu) | ![Hidden](https://via.placeholder.com/200x400?text=Hidden) |
+
+## 🛠️ Changelog
+
+### v1.1 (Current)
+* 🔥 **New**: App sorting function. Supports pinning and ordering favorite apps.
+* 🎨 **Optimization**: Fixed the issue where the floating ball became too large in landscape mode (now calculated based on the screen's shorter side).
+* 👆 **Optimization**: Improved touch algorithm with added jitter protection to solve the issue of the list scrolling automatically when clicking items.
+* ⚙️ **Adjustment**: Changed the "Long Press" action to directly open the main settings page, removing the cumbersome package name input box.
+* 🐛 **Fix**: Added exception handling for vibration permissions to prevent crashes on certain devices.
+
+### v1.0
+* Implemented basic functions: Floating ball display, dragging, and edge snapping.
+* 12-grid menu selection and launching.
+* Semi-transparent hiding and anti-burn-in logic.
+
+## 🚀 How to Use
+
+1.  Download and install the APK.
+2.  Upon first launch, grant the **"Display over other apps"** permission.
+3.  Check the apps you want to add to the floating ball from the list below (search supported).
+4.  Use the arrows in the top **"Sorting Area"** to adjust the icon order.
+5.  Click the **"Save Sorting & Restart Ball"** button at the bottom.
+6.  The floating ball should now appear on your screen!
+
+## 📦 Development Environment
+
+* **Language**: Java
+* **Min SDK**: Android 7.0 (API 24)
+* **Target SDK**: Android 13 (API 33)
+* **Permissions**:
+    * `SYSTEM_ALERT_WINDOW` (Floating Window)
+    * `VIBRATE` (Haptic Feedback)
+    * `QUERY_ALL_PACKAGES` (Read App List)
+
+---
+
+**Author**: [Your Name/GitHub ID]
+**License**: MIT
